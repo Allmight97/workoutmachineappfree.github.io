@@ -1,8 +1,8 @@
 # AGENTS.md (Vitruvian Rescue Project)
+**Last Updated:** October 24, 2025
+*Mission: Keep Vitruvian Trainer owners in control of their hardware via an offline (currently browser-based) workflow that remains viable regardless of company status.*
 
-*Mission: Keep Vitruvian Trainer owners in control of their hardware via an offline, browser-only workflow that remains viable regardless of company status.*
-
-## Agent Role & Approach
+## AI Agent Role & Approach
 You are a senior software engineer who audits and develops code using engineering principles and a coaching approach. Your goal: help produce excellent, maintainable software appropriately engineered for the use case.
 
 ### Core Principles (rate 1-5 when auditing, designing/architecting, or editing code)
@@ -46,6 +46,17 @@ Choose your starting point based on familiarity—if you already know the API su
 
 **Efficiency**: Use a single tool when the query clearly maps to one category. After your starting tool, run the other Exa tool only if needed; escalate to Context7 only when both Exa passes fail, and note failed attempts before escalating.
 
+### Agent Tools Policy (local automation)
+- Allowed categories:
+  - POSIX: `sh`, `sed`, `awk`, `grep`, `find`, `xargs`, `cut`, `sort`, `uniq`, `tr`, `printf`
+  - Modern CLIs: `jq`, `yq`, `ripgrep (rg)`, `fd`, `curl`, `gh`
+  - macOS vendor CLIs: `python3`, `plutil`, `security`, `system_profiler`, `networksetup`, `openssl`, `xcrun`
+- Rules:
+  - Non-interactive flags only; avoid launching GUIs
+  - Prefer JSON/line-oriented output; avoid free-form logs
+  - Log exact commands and a one-line result summary
+  - Default to portable/POSIX syntax; do not rely on GNU-only flags unless explicitly available
+
 ---
 
 ## Project (Vitruvian Trainer Rescue) Context
@@ -73,6 +84,12 @@ Choose your starting point based on familiarity—if you already know the API su
 - **Telemetry loop**: notifications → device.parseMonitorData → rep state machine → canvas update → UI feedback.
 
 *Safety: The STOP control must always succeed; "Just Lift" remains disabled until safe auto-stop exists.*
+
+### Agent Runbooks (success criteria)
+- Connect: Click Connect → chooser appears → connect → UI shows connected; console has no errors
+- Start Program: Configure inputs → send frames (4/34/96 bytes) → telemetry updates visible; no BLE errors
+- Stop: Click STOP → device halts promptly; UI reflects idle; no lingering notifications
+- Diagnostics: Open DevTools → verify no uncaught exceptions; capture snapshot + brief notes
 
 ---
 
@@ -113,12 +130,26 @@ Choose your starting point based on familiarity—if you already know the API su
 - Clamp or sanitize numeric values to device-supported ranges.
 - Add concise comments explaining reverse-engineered intent when modifying frames.
 
+### Protocol Safety Preflight (before transmitting)
+- Confirm frame length and offsets match spec; reject on mismatch
+- Use explicit little-endian/endianness for every multi-byte write
+- Clamp inputs to device-supported ranges; sanitize user-provided values
+- Abort on invalid payload sizes or unexpected values; do not “best effort”
+- Record test notes: device state, mode, payload summary, observed response
+
 ### Web Bluetooth Practices
 - Require an explicit user gesture before requesting devices.
 - Guard all async BLE calls with try/catch and surface actionable feedback.
 - Verify objects before access; handle null/undefined defensively.
 - Remove listeners and close GATT sessions on disconnect.
 - Treat user-cancel events as expected; reset UI state gracefully.
+
+### BLE Triage Playbook (first steps)
+- Pairing cancelled: treat as expected; reset UI state, allow immediate retry
+- GATT disconnects: remove listeners, close server, present reconnect affordance
+- No notifications: confirm characteristic subscription, permissions, and filters
+- Payload mismatch: stop transmission, log lengths/offsets, revert to known-good
+- Rapid commands: serialize writes; debounce UI to avoid overlapping ops
 
 ### Security & Validation
 - Bound-check user-provided weights, reps, colors, and timings.
@@ -136,9 +167,20 @@ Choose your starting point based on familiarity—if you already know the API su
 - Serve locally via HTTPS or localhost to enable Web Bluetooth during development.
 - Capture console logs and telemetry snapshots for regression tracking.
 
+### No-hardware operating bounds
+- Allowed without hardware: docs, UI layout/styles, static analysis, refactors that do not change protocol behavior
+- Must not change without hardware test: program timing, frame payload structure, STOP behavior, notification handling
+
 ### Change Management Rules
 - **What NOT to do**: add external dependencies without review; break Web Bluetooth compatibility; alter protocol frames without notes; remove features without consensus; merge changes that skip hardware validation.
 - **What TO do**: socialize plans for major shifts; keep diffs focused; document protocol decisions; prioritize user safety and fail-safe behavior; remember the community depends on this for daily workouts.
+
+### Change Proposal Template (for non-trivial changes)
+- Intent: what problem, what outcome
+- Blast radius: code paths, user-visible impact, safety considerations
+- Test plan: manual + hardware scenarios; success criteria
+- Rollback: how to revert quickly if needed
+- Minimal-diff rationale: why this is the smallest safe change
 
 ### Chrome DevTools MCP (for agents)
 - **Purpose**: fast UI validation, diagnostics, and visual capture; never a substitute for live hardware testing.
@@ -147,7 +189,4 @@ Choose your starting point based on familiarity—if you already know the API su
 - **Usage patterns**: open the app and wait for the "Connect to Device" prompt; trigger core buttons (Connect, Start Program, Stop) and confirm the console stays clean; capture snapshots or screenshots to analyze UI state before and after interactions.
 - **Prep**: if you need local serving steps, see README “Quick start” for localhost instructions.
 
----
-
-**Last Updated:** October 23, 2025  
-**Maintained by:** Community contributors
+<END>
