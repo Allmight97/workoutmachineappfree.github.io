@@ -4,6 +4,8 @@ This document gives context beyond the README TL;DR. It summarizes the situation
 
 Note: README.md is the entry point for users; this brief focuses on background and technical summary.
 
+For operating guidance (tools, workflow, safety), see ../AGENTS.md.
+
 ## Situation snapshot
 - Company status: community reports indicate administration with a decision pending Oct 27, 2025.
 - Risk: when company servers disappear, the official app’s periodic check‑in can block usage, stranding $3k+ hardware.
