@@ -13,6 +13,7 @@ class VitruvianApp {
     this.targetReps = 0; // Target working reps
     this.workoutHistory = []; // Track completed workouts
     this.currentWorkout = null; // Current workout info
+    this._isStopping = false;
     this.setupLogging();
     this.setupGraph();
     this.resetRepCountersToEmpty();
@@ -508,6 +509,18 @@ class VitruvianApp {
   }
 
   async stopWorkout() {
+    if (this._isStopping) {
+      return;
+    }
+
+    this._isStopping = true;
+    const stopBtn = document.getElementById("stopBtn");
+    if (stopBtn) {
+      stopBtn.disabled = true;
+    }
+
+    const startedAt = Date.now();
+
     try {
       await this.device.sendStopCommand();
       this.addLogEntry("Workout stopped by user", "info");
@@ -518,6 +531,15 @@ class VitruvianApp {
       console.error("Stop workout error:", error);
       this.addLogEntry(`Failed to stop workout: ${error.message}`, "error");
       alert(`Failed to stop workout: ${error.message}`);
+    } finally {
+      const duration = Date.now() - startedAt;
+      this.addLogEntry(`STOP flow completed in ${duration}ms`, "info");
+
+      if (stopBtn) {
+        stopBtn.disabled = false;
+      }
+
+      this._isStopping = false;
     }
   }
 

@@ -37,6 +37,7 @@ class VitruvianDevice {
     this.monitorListeners = [];
     this.lastGoodPosA = 0;
     this.lastGoodPosB = 0;
+    this._isStopping = false;
   }
 
   log(message, type = "info") {
@@ -225,11 +226,59 @@ class VitruvianDevice {
     if (!this.isConnected) {
       throw new Error("Device not connected");
     }
+    if (this._isStopping) {
+      this.log("STOP already in progress", "info");
+      return;
+    }
 
-    this.log("\nSending STOP command...", "info");
-    const cmd = buildInitCommand(); // Stop command is same as init command
-    await this.writeWithResponse("Stop command", cmd);
-    this.log("Workout stopped!", "success");
+    this._isStopping = true;
+
+    try {
+      this.stopPropertyPolling();
+      this.stopMonitorPolling();
+
+      const cmd = buildInitCommand();
+      const maxAttempts = 3;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        this.log(`\nSTOP attempt ${attempt}/${maxAttempts}...`, "info");
+
+        try {
+          await this.writeWithResponse("Stop command", cmd);
+          this.log("Workout stopped!", "success");
+          return;
+        } catch (error) {
+          const message = (error && error.message) || String(error);
+
+          if (
+            attempt < maxAttempts &&
+            /Network|GATT|InvalidState/i.test(message)
+          ) {
+            this.log(
+              `STOP retry ${attempt + 1}/${maxAttempts} after transient error: ${message}`,
+              "info",
+            );
+            await this.sleep(100);
+            continue;
+          }
+
+          throw error;
+        }
+      }
+    } catch (error) {
+      this.log(`STOP failed after retries: ${error.message}`, "error");
+      try {
+        await this.disconnect();
+      } catch (disconnectError) {
+        this.log(
+          `Disconnect during STOP cleanup failed: ${disconnectError.message}`,
+          "error",
+        );
+      }
+      throw error;
+    } finally {
+      this._isStopping = false;
+    }
   }
 
   // Start a workout program
