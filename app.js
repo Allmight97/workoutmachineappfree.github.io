@@ -4,6 +4,8 @@ class VitruvianApp {
   constructor() {
     this.device = new VitruvianDevice();
     this.loadHistory = [];
+    this.frozenHistory = null;
+    this.isGraphFrozen = false;
     this.maxHistoryPoints = 300; // 30 seconds at 100ms polling
     this.maxPosA = 1000; // Dynamic max for Right Cable (A)
     this.maxPosB = 1000; // Dynamic max for Left Cable (B)
@@ -17,6 +19,7 @@ class VitruvianApp {
     this.setupLogging();
     this.setupGraph();
     this.resetRepCountersToEmpty();
+    this.updateResumeGraphButton(false);
   }
 
   setupLogging() {
@@ -66,12 +69,66 @@ class VitruvianApp {
     this.drawGraph();
   }
 
+  updateResumeGraphButton(visible) {
+    const button = document.getElementById("resumeGraphBtn");
+    if (!button) return;
+
+    if (visible) {
+      button.classList.remove("hidden");
+      button.disabled = false;
+    } else {
+      button.classList.add("hidden");
+      button.disabled = false;
+    }
+  }
+
+  freezeGraphSnapshot(message) {
+    if (this.isGraphFrozen) {
+      return;
+    }
+
+    if (this.loadHistory.length === 0) {
+      return;
+    }
+
+    this.isGraphFrozen = true;
+    this.frozenHistory = this.loadHistory.map((point) => ({ ...point }));
+    this.updateResumeGraphButton(true);
+
+    const logMessage =
+      message || "Graph frozen – click Resume Live Graph to return to live data.";
+    this.addLogEntry(logMessage, "info");
+
+    this.drawGraph();
+  }
+
+  resumeLiveGraph(silent = false) {
+    if (!this.isGraphFrozen) {
+      return;
+    }
+
+    this.isGraphFrozen = false;
+    this.frozenHistory = null;
+    this.loadHistory = [];
+    this.updateResumeGraphButton(false);
+
+    if (!silent) {
+      this.addLogEntry("Live graph resumed", "info");
+    }
+
+    this.drawGraph();
+  }
+
   drawGraph() {
     if (!this.ctx || !this.canvas) return;
 
     const width = this.canvasDisplayWidth || this.canvas.width;
     const height = this.canvasDisplayHeight || this.canvas.height;
     const ctx = this.ctx;
+    const history =
+      this.isGraphFrozen && this.frozenHistory && this.frozenHistory.length > 0
+        ? this.frozenHistory
+        : this.loadHistory;
 
     if (width === 0 || height === 0) return; // Canvas not sized yet
 
@@ -82,7 +139,7 @@ class VitruvianApp {
     // Set text rendering for crisp fonts
     ctx.textRendering = "optimizeLegibility";
 
-    if (this.loadHistory.length < 2) {
+    if (history.length < 2) {
       // Not enough data to draw
       ctx.fillStyle = "#6c757d";
       ctx.font = "14px -apple-system, sans-serif";
@@ -97,7 +154,7 @@ class VitruvianApp {
 
     // Find max load for scaling
     let maxLoad = 0;
-    for (const point of this.loadHistory) {
+    for (const point of history) {
       const totalLoad = point.loadA + point.loadB;
       if (totalLoad > maxLoad) maxLoad = totalLoad;
     }
@@ -150,7 +207,7 @@ class VitruvianApp {
 
     // Draw lines for each cable and total
     // Calculate spacing based on actual number of points to fill the graph width
-    const numPoints = this.loadHistory.length;
+    const numPoints = history.length;
     const pointSpacing = numPoints > 1 ? graphWidth / (numPoints - 1) : 0;
 
     // Helper to draw a line
@@ -162,8 +219,8 @@ class VitruvianApp {
       ctx.beginPath();
 
       let started = false;
-      for (let i = 0; i < this.loadHistory.length; i++) {
-        const point = this.loadHistory[i];
+      for (let i = 0; i < history.length; i++) {
+        const point = history[i];
         const value = getData(point);
         const x = padding + i * pointSpacing;
         const y = padding + graphHeight - (value / maxLoad) * graphHeight;
@@ -285,6 +342,10 @@ class VitruvianApp {
     document.getElementById("barA").style.height = heightA + "%";
     document.getElementById("barB").style.height = heightB + "%";
 
+    if (this.isGraphFrozen) {
+      return;
+    }
+
     // Add to load history
     this.loadHistory.push({
       timestamp: sample.timestamp,
@@ -396,6 +457,10 @@ class VitruvianApp {
       // Reset to empty state
       this.resetRepCountersToEmpty();
       this.addLogEntry("Workout completed and saved to history", "success");
+
+      this.freezeGraphSnapshot(
+        "Workout completed – graph frozen. Click Resume Live Graph to review the last set.",
+      );
     }
   }
 
@@ -527,6 +592,10 @@ class VitruvianApp {
 
       // Complete the workout and save to history
       this.completeWorkout();
+
+      this.freezeGraphSnapshot(
+        "STOP acknowledged – graph frozen. Click Resume Live Graph to continue live telemetry.",
+      );
     } catch (error) {
       console.error("Stop workout error:", error);
       this.addLogEntry(`Failed to stop workout: ${error.message}`, "error");
@@ -594,6 +663,8 @@ class VitruvianApp {
       };
       this.updateRepCounters();
 
+      this.resumeLiveGraph(true);
+
       await this.device.startProgram(params);
 
       // Set up monitor listener
@@ -659,6 +730,8 @@ class VitruvianApp {
         targetReps: targetReps,
       };
       this.updateRepCounters();
+
+      this.resumeLiveGraph(true);
 
       await this.device.startEcho(params);
 

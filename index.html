@@ -741,9 +741,27 @@
                             id="graphHistoryContainer"
                         >
                             <div>
-                                <h3 style="color: #667eea; margin-bottom: 10px">
-                                    Load History
-                                </h3>
+                                <div
+                                    style="
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: space-between;
+                                        gap: 12px;
+                                        margin-bottom: 10px;
+                                    "
+                                >
+                                    <h3 style="color: #667eea; margin: 0">
+                                        Load History
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        id="resumeGraphBtn"
+                                        class="secondary hidden"
+                                        onclick="app.resumeLiveGraph()"
+                                    >
+                                        Resume Live Graph
+                                    </button>
+                                </div>
                                 <canvas id="loadGraph"></canvas>
                             </div>
 
