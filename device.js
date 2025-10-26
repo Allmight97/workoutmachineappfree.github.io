@@ -32,6 +32,7 @@ class VitruvianDevice {
     this.propertyInterval = null;
     this.monitorInterval = null;
     this.onLog = null; // Callback for logging
+    this.onDisconnect = null; // Callback for external disconnect handling
     this.propertyListeners = [];
     this.repListeners = [];
     this.monitorListeners = [];
@@ -77,6 +78,13 @@ class VitruvianDevice {
       this.device.addEventListener("gattserverdisconnected", () => {
         this.log("Device disconnected", "error");
         this.handleDisconnect();
+        if (typeof this.onDisconnect === "function") {
+          try {
+            this.onDisconnect();
+          } catch (callbackError) {
+            console.error("onDisconnect callback error:", callbackError);
+          }
+        }
       });
 
       // Connect to GATT server

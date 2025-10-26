@@ -16,6 +16,7 @@ class VitruvianApp {
     this.workoutHistory = []; // Track completed workouts
     this.currentWorkout = null; // Current workout info
     this._isStopping = false;
+    this._isCompleting = false;
     this.setupLogging();
     this.setupGraph();
     this.resetRepCountersToEmpty();
@@ -26,6 +27,14 @@ class VitruvianApp {
     // Connect device logging to UI
     this.device.onLog = (message, type) => {
       this.addLogEntry(message, type);
+    };
+
+    this.device.onDisconnect = () => {
+      this.updateConnectionStatus(false);
+      this.addLogEntry(
+        "Device disconnected. Please reconnect before starting another workout.",
+        "error",
+      );
     };
   }
 
@@ -75,10 +84,8 @@ class VitruvianApp {
 
     if (visible) {
       button.classList.remove("hidden");
-      button.disabled = false;
     } else {
       button.classList.add("hidden");
-      button.disabled = false;
     }
   }
 
@@ -445,7 +452,13 @@ class VitruvianApp {
   }
 
   completeWorkout() {
-    if (this.currentWorkout) {
+    if (!this.currentWorkout || this._isCompleting) {
+      return;
+    }
+
+    this._isCompleting = true;
+
+    try {
       // Add to history
       this.addToWorkoutHistory({
         mode: this.currentWorkout.mode,
@@ -461,6 +474,8 @@ class VitruvianApp {
       this.freezeGraphSnapshot(
         "Workout completed – graph frozen. Click Resume Live Graph to review the last set.",
       );
+    } finally {
+      this._isCompleting = false;
     }
   }
 
@@ -599,12 +614,21 @@ class VitruvianApp {
     } catch (error) {
       console.error("Stop workout error:", error);
       this.addLogEntry(`Failed to stop workout: ${error.message}`, "error");
+
+      if (!this.device.isConnected) {
+        this.updateConnectionStatus(false);
+        this.addLogEntry(
+          "Device disconnected during STOP safety fallback. Please reconnect before continuing.",
+          "error",
+        );
+      }
+
       alert(`Failed to stop workout: ${error.message}`);
     } finally {
       const duration = Date.now() - startedAt;
       this.addLogEntry(`STOP flow completed in ${duration}ms`, "info");
 
-      if (stopBtn) {
+      if (stopBtn && this.device.isConnected) {
         stopBtn.disabled = false;
       }
 
