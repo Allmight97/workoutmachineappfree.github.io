@@ -19,7 +19,46 @@ To validate the hypotheses and design safe-window logic:
 3. **Reproduction Matrix**: For each run, note: starting weight, progression, limit, mode, Just Lift toggle, observed rep count before load change, and whether the workout auto-completed. This helps isolate validation gaps.
 4. **Command Timing**: Export BLE operation timestamps (queue logs) to confirm whether `updateProgramParams` executes while loads are non-zero; optionally video the console if direct export isn’t available.
 
-## Next Steps
-- Rework progression tracking to split warmup vs working reps before applying caps.
-- Introduce a safe-window detector that only sends capped frames when both cables report near-zero load for a fixed interval.
-- Enforce limit vs starting weight comparisons and hide/disable the field when progression is neutral to reduce invalid input combinations.
+## Greenfield Implementation Plan
+1. **Program Plan Model**
+   - Create a small module (e.g., `programLimitPlan.js`) that encapsulates session math: starting weight, progression, limit, rep index. Provide pure helpers (`computeTarget(repIndex)`, `shouldSaturate(repIndex)`, `isValid()` with start/limit checks).
+   - Value: isolates logic, enables unit tests, keeps controller lean (Design 4/5, DRY 4/5).
+
+2. **Safe-Window Gate**
+   - Add a reusable telemetry helper (e.g., `safeWindow.js`) subscribing to monitor samples and emitting `onUnloaded` events when both cables report load below a threshold for a minimum window.
+   - Value: enforces the spec’s “only adjust when unloaded” rule; shared with existing Just Lift auto-stop logic (SoC 4/5, Fail Fast 4/5).
+
+3. **Controller Integration**
+   - In `startProgram()`, build a `ProgramPlan` from inputs, validate, and store it alongside session state. Hide/disable the limit field when progression is neutral.
+   - On each rep completion (after warmup), request the next target from the plan. If saturation occurs, enqueue `device.updateProgramParams()` inside the safe-window callback.
+   - Value: maintains existing workflow while making progression explicit and testable (KISS 4/5).
+
+4. **Validation & UX**
+   - Enforce limit ≥ start for positive progression and limit ≤ start for negative progression; reject invalid combos with alerts and disable Start until resolved.
+   - Toggle the limit field visibility/labels based on progression sign to match `feat_weight_limit.md`.
+
+5. **Testing**
+   - Unit-test the plan helpers for positive/negative progression, early saturation, and “no limit” cases.
+   - Simulate monitor samples to exercise safe-window gating in test mode.
+   - Hardware smoke: confirm capped sessions ramp correctly and Just Lift holds at the limit without auto-stop glitches.
+
+## Migration Bridge from Current Codebase
+1. **Add Safe-Window Instrumentation First**
+   - Introduce a non-invasive telemetry helper that logs when loads fall below the rest threshold. This can coexist with the current limit logic and informs threshold tuning without behavior changes.
+
+2. **Refactor Progression Tracking**
+   - Split warmup vs working progression inside `updateProgramTrackingAfterRep()`; ensure warmup reps no longer increment `perCableKg`. This change fixes the premature cap while leaving the rest of the logic intact.
+
+3. **Strengthen Validation**
+   - Update `startProgram()` validation to enforce limit/start relationships and hide/disable the input when progression is zero. This is low risk and fails fast at the UI boundary.
+
+4. **Introduce Program Plan Module**
+   - Extract progression math into a helper module and wire it in, preserving current behavior. Once plan outputs match existing expectations (minus the warmup fix), remove redundant controller math.
+
+5. **Replace Immediate Cap with Safe-Window Update**
+   - Swap the direct `device.updateProgramParams()` call with the safe-window callback that queues the update only when unloaded. Ensure telemetry logs confirm the window before sending.
+
+6. **Cleanup & DRY Pass**
+   - After behavior is correct and telemetry validated, consider revisiting PR C to streamline parsing/validation helpers and keep the controller maintainable.
+
+Each step delivers value while keeping diffs focused: stopping early cap regressions, protecting against mid-load updates, and aligning the UI/validation with the documented spec.
