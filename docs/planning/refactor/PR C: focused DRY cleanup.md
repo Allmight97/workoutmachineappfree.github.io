@@ -2,9 +2,6 @@
 
 **Priority**: Medium (Maintainability)  
 **Target PR**: `baseline/controller-dry-refactor`  
-**Estimated Effort**: Medium (≈2 hours)
-
-**Sequence**: After PR 05 merges (so we refactor the finalized lifecycle code). Independent of PR 06.
 
 **Synergy**: Tightens up `startProgram` and `startEcho` once lifecycle fixes are in place, making the controllers easier to extend for future features.
 
