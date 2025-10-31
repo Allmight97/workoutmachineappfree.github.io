@@ -72,6 +72,18 @@ function assertColorArray(colors) {
   }
 }
 
+function assertSequence(value, expected, label) {
+  if (value === null || value === undefined) {
+    throw new Error(`${label} is required but missing`);
+  }
+
+  if (value !== expected) {
+    const formatHex = (num) => `0x${num.toString(16).padStart(2, "0")}`;
+    const received = typeof value === "number" ? formatHex(value) : String(value);
+    throw new Error(`${label} expected ${formatHex(expected)}, received ${received}`);
+  }
+}
+
 // Build the initial 4-byte command sent before INIT
 function buildInitCommand() {
   return new Uint8Array([0x0a, 0x00, 0x00, 0x00]);
@@ -155,6 +167,8 @@ function buildProgramParams(params) {
   const validModes = [0, 1, 2, 3, 4];
   const modeToCheck = params.isJustLift ? params.baseMode : params.mode;
   assertEnum(modeToCheck, validModes, "Program mode");
+
+  assertSequence(params.sequenceID, 0x0b, "Program sequenceID");
 
   const frame = new Uint8Array(96);
   const buffer = frame.buffer;
@@ -260,6 +274,8 @@ function buildEchoControl(params) {
       });
     }
   }
+
+  assertSequence(params.sequenceID, 0x01, "Echo sequenceID");
 
   const frame = new Uint8Array(32);
   const buffer = frame.buffer;
